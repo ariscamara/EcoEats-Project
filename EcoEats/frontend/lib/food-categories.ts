@@ -1,0 +1,18 @@
+export const foodCategories = [
+  { value: "fruits", label: "Fruits" },
+  { value: "vegetables", label: "Vegetables" },
+  { value: "dairy", label: "Dairy" },
+  { value: "meat", label: "Meat" },
+  { value: "poultry", label: "Poultry" },
+  { value: "seafood", label: "Seafood" },
+  { value: "grains", label: "Grains & Cereals" },
+  { value: "bakery", label: "Bakery" },
+  { value: "canned", label: "Canned Goods" },
+  { value: "frozen", label: "Frozen Foods" },
+  { value: "snacks", label: "Snacks" },
+  { value: "beverages", label: "Beverages" },
+  { value: "condiments", label: "Condiments & Sauces" },
+  { value: "spices", label: "Herbs & Spices" },
+  { value: "oils", label: "Oils & Vinegars" },
+  { value: "other", label: "Other" },
+]
