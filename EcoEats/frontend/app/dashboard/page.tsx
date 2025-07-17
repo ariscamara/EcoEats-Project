@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { differenceInDays } from "date-fns"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,8 +37,37 @@ export default function DashboardPage() {
         if (!recipesResponse.ok) throw new Error("Recipe fetch failed")
         const recipesData = await recipesResponse.json()
 
-        // Update state with real API data
-        setInventoryItems(inventoryData)
+        
+        const today = new Date()
+
+        const processedInventory: InventoryItem[] = inventoryData.map((item: any) => {
+          //  Django fields are `purchase_date` + `expiration_date`
+          //     (not `date_added`).  Parse them as real Date objects:
+          const purchase     = new Date(item.purchase_date);
+          const expiration   = new Date(item.expiration_date);
+
+          // Guard-rails: if either date is missing or invalid, treat shelf-life as 0.
+          if (isNaN(purchase.getTime()) || isNaN(expiration.getTime())) {
+            return {
+              ...item,
+              daysUntilExpiration: 0,
+              totalShelfLife:      0,
+            }
+          }
+
+          // Difference in days (rounded *down*):
+          const totalShelfLife      = Math.max(0, differenceInDays(expiration, purchase))
+          const daysUntilExpiration = Math.max(0, differenceInDays(expiration, today))
+
+          return {
+            ...item,
+            daysUntilExpiration,
+            totalShelfLife,
+          }
+        })
+
+        //END processing block  
+        setInventoryItems(processedInventory)
         setRecipes(recipesData)
 
       } catch (err) {
@@ -84,10 +114,14 @@ export default function DashboardPage() {
     }
   }
 
-  const calculateFreshnessPercentage = (daysUntilExpiration: number, totalShelfLife: number) => {
-    const percentage = (daysUntilExpiration / totalShelfLife) * 100
-    return Math.max(0, Math.min(100, percentage))
-  }
+  const calculateFreshnessPercentage = (
+    daysUntilExpiration: number,
+    totalShelfLife: number
+  ) => {
+    if (!totalShelfLife || totalShelfLife <= 0) return 0; 
+    const pct = (daysUntilExpiration / totalShelfLife) * 100;
+    return Math.max(0, Math.min(100, Math.round(pct)));
+  };
 
   const markItemAsUsed = async (id: string) => {
     try {
@@ -122,6 +156,14 @@ export default function DashboardPage() {
       console.error("Error marking item as discarded:", err)
     }
   }
+
+  // Sort items so that the least-fresh (soonest-to-expire) are first
+  const sortedInventory = [...inventoryItems].sort((a, b) => {
+    if (a.daysUntilExpiration !== b.daysUntilExpiration) {
+      return a.daysUntilExpiration - b.daysUntilExpiration; // ascending
+    }
+    return a.name.localeCompare(b.name); // stable secondary sort
+  })
 
   if (loading) {
     return (
@@ -251,7 +293,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        {inventoryItems.filter((item) => item.daysUntilExpiration <= 3).length}
+                        {sortedInventory.filter((item) => item.daysUntilExpiration <= 3).length}
                       </div>
                     </CardContent>
                   </Card>
@@ -291,7 +333,7 @@ export default function DashboardPage() {
                           </Link>
                         </div>
                       ) : (
-                        inventoryItems.map((item) => {
+                        sortedInventory.map((item) => {
                           const status = getExpirationStatus(item.daysUntilExpiration)
                           const statusColor = getStatusColor(status)
                           const progressColor = getProgressColor(status)
@@ -328,7 +370,7 @@ export default function DashboardPage() {
                                 />
                               </div>
                               <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => markItemAsUsed}>
+                                <Button variant="outline" size="sm" onClick={() => markItemAsUsed(item.id)}>
                                   Mark as Used
                                 </Button>
                                 <Button

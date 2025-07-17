@@ -1,5 +1,6 @@
 "use client"
 
+import { differenceInDays } from "date-fns"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,6 @@ import { Leaf, Plus, Search, Filter, ArrowUpDown, ArrowLeft } from "lucide-react
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardShell } from "@/components/dashboard-shell"
 import type { InventoryItem } from "@/types/inventory"
-import { mockInventoryItems } from "@/lib/mock-data"
 import { foodCategories } from "@/lib/food-categories"
 import {
   DropdownMenu,
@@ -46,35 +46,26 @@ export default function InventoryPage() {
         }
         const rawData = await response.json()
 
-        const enrichedData = rawData
-          .map((item: any) => {
-            const purchase = new Date(item.purchase_date)
-            const expiration = new Date(item.expiration_date)
-            const today = new Date()
+        // ── Convert Django date strings to dashboard-friendly numbers ──
+        const today = new Date()
+        const processed: InventoryItem[] = rawData.map((item: any) => {
+          const expiration = new Date(item.expiration_date)
+          const purchase   = new Date(item.purchase_date)         // or item.added_at
 
-            if (isNaN(purchase.getTime()) || isNaN(expiration.getTime())) {
-              console.warn("Invalid dates for item:", item)
-              return null
-            }
+          const daysUntilExpiration = differenceInDays(expiration, today)
+          const totalShelfLife      = Math.max(
+            1,                                 // avoid divide-by-zero
+            differenceInDays(expiration, purchase)
+          )
 
-            const totalShelfLife = expiration.getTime() - purchase.getTime()
-            const timeElapsed = today.getTime() - purchase.getTime()
-            const freshness = 100 - Math.round((timeElapsed / totalShelfLife) * 100)
-            const clampedFreshness = Math.max(0, Math.min(freshness, 100))
+          return {
+            ...item,
+            daysUntilExpiration,
+            totalShelfLife,
+          }
+        })
 
-            const msPerDay = 1000 * 60 * 60 * 24
-            const daysUntilExpiration = Math.ceil((expiration.getTime() - today.getTime()) / msPerDay)
-
-            return {
-              ...item,
-              freshness: clampedFreshness,
-              daysUntilExpiration,
-              totalShelfLife: Math.ceil(totalShelfLife / msPerDay),
-            }
-          })
-          .filter(Boolean) // Remove any null items caused by invalid dates
-
-        setInventoryItems(enrichedData)
+        setInventoryItems(processed)
 
       } catch (err) {
         setError("Failed to load inventory")
@@ -198,6 +189,18 @@ export default function InventoryPage() {
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
     )
   }
+
+  //  Sort so earliest-to-expire items appear first
+const sortedInventory = [...inventoryItems].sort((a, b) => {
+  if (a.daysUntilExpiration !== b.daysUntilExpiration) {
+    return a.daysUntilExpiration - b.daysUntilExpiration    // 0,1,2…
+  }
+  return a.name.localeCompare(b.name)                       // tie-breaker
+})
+
+
+
+
 
   if (loading) {
     return (
@@ -331,7 +334,7 @@ export default function InventoryPage() {
                           </Link>
                         </div>
                       ) : (
-                        filteredItems.map((item) => {
+                        sortedInventory.map((item) => {
                           const status = getExpirationStatus(item.daysUntilExpiration)
                           const statusColor = getStatusColor(status)
                           const progressColor = getProgressColor(status)
@@ -409,7 +412,7 @@ export default function InventoryPage() {
                           <p className="text-muted-foreground">No items expiring soon.</p>
                         </div>
                       ) : (
-                        filteredItems
+                        sortedInventory
                           .filter((item) => item.daysUntilExpiration <= 5)
                           .map((item) => {
                             const status = getExpirationStatus(item.daysUntilExpiration)
