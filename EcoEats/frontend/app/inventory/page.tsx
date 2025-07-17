@@ -44,8 +44,37 @@ export default function InventoryPage() {
         if (!response.ok) {
           throw new Error("Failed to fetch inventory items from the server")
         }
-        const data = await response.json()
-        setInventoryItems(data)
+        const rawData = await response.json()
+
+        const enrichedData = rawData
+          .map((item: any) => {
+            const purchase = new Date(item.purchase_date)
+            const expiration = new Date(item.expiration_date)
+            const today = new Date()
+
+            if (isNaN(purchase.getTime()) || isNaN(expiration.getTime())) {
+              console.warn("Invalid dates for item:", item)
+              return null
+            }
+
+            const totalShelfLife = expiration.getTime() - purchase.getTime()
+            const timeElapsed = today.getTime() - purchase.getTime()
+            const freshness = 100 - Math.round((timeElapsed / totalShelfLife) * 100)
+            const clampedFreshness = Math.max(0, Math.min(freshness, 100))
+
+            const msPerDay = 1000 * 60 * 60 * 24
+            const daysUntilExpiration = Math.ceil((expiration.getTime() - today.getTime()) / msPerDay)
+
+            return {
+              ...item,
+              freshness: clampedFreshness,
+              daysUntilExpiration,
+              totalShelfLife: Math.ceil(totalShelfLife / msPerDay),
+            }
+          })
+          .filter(Boolean) // Remove any null items caused by invalid dates
+
+        setInventoryItems(enrichedData)
 
       } catch (err) {
         setError("Failed to load inventory")
@@ -121,7 +150,7 @@ export default function InventoryPage() {
   const markItemAsDiscarded = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      
+
       // Send POST request to Django backend to mark the item as discarded
       const response = await fetch(`http://localhost:8000/api/inventory/${id}/mark-discarded/`, {
         method: "POST",
@@ -336,8 +365,7 @@ export default function InventoryPage() {
                                 </div>
                                 <Progress
                                   value={freshnessPercentage}
-                                  className="h-2"
-                                  indicatorClassName={progressColor}
+                                  className={`h-2 ${progressColor}`}
                                 />
                               </div>
                               <div className="pt-2 text-sm">
@@ -417,8 +445,7 @@ export default function InventoryPage() {
                                   </div>
                                   <Progress
                                     value={freshnessPercentage}
-                                    className="h-2"
-                                    indicatorClassName={progressColor}
+                                    className={`h-2 ${progressColor}`}
                                   />
                                 </div>
                                 <div className="pt-2 text-sm font-medium text-red-600">
