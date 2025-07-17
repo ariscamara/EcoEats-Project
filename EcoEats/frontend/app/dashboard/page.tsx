@@ -12,7 +12,7 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardShell } from "@/components/dashboard-shell"
 import type { InventoryItem } from "@/types/inventory"
 import type { Recipe } from "@/types/recipe"
-import { mockInventoryItems, mockRecipes } from "@/lib/mock-data"
+
 
 export default function DashboardPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -25,16 +25,23 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         setLoading(true)
-        // Simulate API calls - replace with actual fetch calls
-        // const inventoryResponse = await fetch('/api/inventory/')
-        // const recipesResponse = await fetch('/api/recipes/')
-        // const inventoryData = await inventoryResponse.json()
-        // const recipesData = await recipesResponse.json()
 
-        // For now, using mock data
-        setInventoryItems(mockInventoryItems)
-        setRecipes(mockRecipes)
+        // Fetch inventory data from Django backend
+        const inventoryResponse = await fetch("http://127.0.0.1:8000/api/inventory/")
+        if (!inventoryResponse.ok) throw new Error("Inventory fetch failed")
+        const inventoryData = await inventoryResponse.json()
+      
+        // Fetch recipe suggestions from Django backend
+        const recipesResponse = await fetch("http://127.0.0.1:8000/api/recipes/")
+        if (!recipesResponse.ok) throw new Error("Recipe fetch failed")
+        const recipesData = await recipesResponse.json()
+
+        // Update state with real API data
+        setInventoryItems(inventoryData)
+        setRecipes(recipesData)
+
       } catch (err) {
+        //Display error UI if any fetch fails
         setError("Failed to load data")
         console.error("Error fetching data:", err)
       } finally {
@@ -85,7 +92,14 @@ export default function DashboardPage() {
   const markItemAsUsed = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-used/`, { method: 'POST' })
+
+      // Send POST request to Django to mark item as used
+      const res = await fetch(`http://127.0.0.1:8000/api/inventory/${id}/mark-used/`, {
+        method: "POST",
+      })
+      if (!res.ok) throw new Error("Failed to mark as used")
+    
+      // Optmistically update UI by removing item 
       setInventoryItems(inventoryItems.filter((item) => item.id !== id))
     } catch (err) {
       console.error("Error marking item as used:", err)
@@ -95,7 +109,14 @@ export default function DashboardPage() {
   const markItemAsDiscarded = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-discarded/`, { method: 'POST' })
+
+      // Send POST request to Django to mark item as discarded
+      const res = await fetch(`http://127.0.0.1:8000/api/inventory/${id}/mark-discarded/`, {
+        method: "POST",
+      })
+      if (!res.ok) throw new Error("Failed to discard item")
+
+      // Optimistically update UI
       setInventoryItems(inventoryItems.filter((item) => item.id !== id))
     } catch (err) {
       console.error("Error marking item as discarded:", err)
@@ -303,12 +324,11 @@ export default function DashboardPage() {
                                 </div>
                                 <Progress
                                   value={freshnessPercentage}
-                                  className="h-2"
-                                  indicatorClassName={progressColor}
+                                  className={`h-2 ${progressColor}`}
                                 />
                               </div>
                               <div className="flex justify-end gap-2">
-                                <Button variant="outline" size="sm" onClick={() => markItemAsUsed(item.id)}>
+                                <Button variant="outline" size="sm" onClick={() => markItemAsUsed}>
                                   Mark as Used
                                 </Button>
                                 <Button
@@ -357,7 +377,7 @@ export default function DashboardPage() {
                                 <div>
                                   <div className="text-sm font-medium">Uses expiring ingredients:</div>
                                   <div className="flex flex-wrap gap-1 mt-1">
-                                    {recipe.usesIngredients.map((ingredient) => (
+                                    {(recipe.usesIngredients ?? []).map((ingredient) => (
                                       <Badge key={ingredient} variant="outline">
                                         {ingredient}
                                       </Badge>
