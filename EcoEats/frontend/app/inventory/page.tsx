@@ -34,12 +34,19 @@ export default function InventoryPage() {
     const fetchInventory = async () => {
       try {
         setLoading(true)
-        // const response = await fetch('/api/inventory/')
-        // const data = await response.json()
-        // setInventoryItems(data)
+      // Make an actual GET request to Django to fetch inventory items
+        const response = await fetch("http://localhost:8000/api/inventory/", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+        if (!response.ok) {
+          throw new Error("Failed to fetch inventory items from the server")
+        }
+        const data = await response.json()
+        setInventoryItems(data)
 
-        // For now, using mock data
-        setInventoryItems(mockInventoryItems)
       } catch (err) {
         setError("Failed to load inventory")
         console.error("Error fetching inventory:", err)
@@ -91,8 +98,21 @@ export default function InventoryPage() {
   const markItemAsUsed = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-used/`, { method: 'POST' })
-      setInventoryItems(inventoryItems.filter((item) => item.id !== id))
+
+      // Send POST request to Django backend to mark the item as used
+      const response = await fetch(`http://localhost:8000/api/inventory/${id}/mark-used/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to mark item ${id} as used`)
+      } 
+      // Remove the item from the local state after success
+      setInventoryItems((prevItems) => prevItems.filter((item) => item.id !== id))
+
     } catch (err) {
       console.error("Error marking item as used:", err)
     }
@@ -101,8 +121,22 @@ export default function InventoryPage() {
   const markItemAsDiscarded = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-discarded/`, { method: 'POST' })
-      setInventoryItems(inventoryItems.filter((item) => item.id !== id))
+      
+      // Send POST request to Django backend to mark the item as discarded
+      const response = await fetch(`http://localhost:8000/api/inventory/${id}/mark-discarded/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to mark item ${id} as discarded`)
+      }
+
+      // Remove the item from the local state after success
+      setInventoryItems((prevItems) => prevItems.filter((item) => item.id !== id))
+
     } catch (err) {
       console.error("Error marking item as discarded:", err)
     }
