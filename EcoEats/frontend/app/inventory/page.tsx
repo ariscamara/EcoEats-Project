@@ -1,5 +1,6 @@
 "use client"
 
+import { differenceInDays } from "date-fns"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,6 @@ import { Leaf, Plus, Search, Filter, ArrowUpDown, ArrowLeft } from "lucide-react
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardShell } from "@/components/dashboard-shell"
 import type { InventoryItem } from "@/types/inventory"
-import { mockInventoryItems } from "@/lib/mock-data"
 import { foodCategories } from "@/lib/food-categories"
 import {
   DropdownMenu,
@@ -34,12 +34,39 @@ export default function InventoryPage() {
     const fetchInventory = async () => {
       try {
         setLoading(true)
-        // const response = await fetch('/api/inventory/')
-        // const data = await response.json()
-        // setInventoryItems(data)
+      // Make an actual GET request to Django to fetch inventory items
+        const response = await fetch("http://localhost:8000/api/inventory/", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+        if (!response.ok) {
+          throw new Error("Failed to fetch inventory items from the server")
+        }
+        const rawData = await response.json()
 
-        // For now, using mock data
-        setInventoryItems(mockInventoryItems)
+        // ── Convert Django date strings to dashboard-friendly numbers ──
+        const today = new Date()
+        const processed: InventoryItem[] = rawData.map((item: any) => {
+          const expiration = new Date(item.expiration_date)
+          const purchase   = new Date(item.purchase_date)         // or item.added_at
+
+          const daysUntilExpiration = differenceInDays(expiration, today)
+          const totalShelfLife      = Math.max(
+            1,                                 // avoid divide-by-zero
+            differenceInDays(expiration, purchase)
+          )
+
+          return {
+            ...item,
+            daysUntilExpiration,
+            totalShelfLife,
+          }
+        })
+
+        setInventoryItems(processed)
+
       } catch (err) {
         setError("Failed to load inventory")
         console.error("Error fetching inventory:", err)
@@ -91,8 +118,21 @@ export default function InventoryPage() {
   const markItemAsUsed = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-used/`, { method: 'POST' })
-      setInventoryItems(inventoryItems.filter((item) => item.id !== id))
+
+      // Send POST request to Django backend to mark the item as used
+      const response = await fetch(`http://localhost:8000/api/inventory/${id}/mark-used/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to mark item ${id} as used`)
+      } 
+      // Remove the item from the local state after success
+      setInventoryItems((prevItems) => prevItems.filter((item) => item.id !== id))
+
     } catch (err) {
       console.error("Error marking item as used:", err)
     }
@@ -101,8 +141,22 @@ export default function InventoryPage() {
   const markItemAsDiscarded = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-discarded/`, { method: 'POST' })
-      setInventoryItems(inventoryItems.filter((item) => item.id !== id))
+
+      // Send POST request to Django backend to mark the item as discarded
+      const response = await fetch(`http://localhost:8000/api/inventory/${id}/mark-discarded/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to mark item ${id} as discarded`)
+      }
+
+      // Remove the item from the local state after success
+      setInventoryItems((prevItems) => prevItems.filter((item) => item.id !== id))
+
     } catch (err) {
       console.error("Error marking item as discarded:", err)
     }
@@ -135,6 +189,18 @@ export default function InventoryPage() {
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
     )
   }
+
+  //  Sort so earliest-to-expire items appear first
+const sortedInventory = [...inventoryItems].sort((a, b) => {
+  if (a.daysUntilExpiration !== b.daysUntilExpiration) {
+    return a.daysUntilExpiration - b.daysUntilExpiration    // 0,1,2…
+  }
+  return a.name.localeCompare(b.name)                       // tie-breaker
+})
+
+
+
+
 
   if (loading) {
     return (
@@ -268,7 +334,7 @@ export default function InventoryPage() {
                           </Link>
                         </div>
                       ) : (
-                        filteredItems.map((item) => {
+                        sortedInventory.map((item) => {
                           const status = getExpirationStatus(item.daysUntilExpiration)
                           const statusColor = getStatusColor(status)
                           const progressColor = getProgressColor(status)
@@ -302,8 +368,7 @@ export default function InventoryPage() {
                                 </div>
                                 <Progress
                                   value={freshnessPercentage}
-                                  className="h-2"
-                                  indicatorClassName={progressColor}
+                                  className={`h-2 ${progressColor}`}
                                 />
                               </div>
                               <div className="pt-2 text-sm">
@@ -347,7 +412,7 @@ export default function InventoryPage() {
                           <p className="text-muted-foreground">No items expiring soon.</p>
                         </div>
                       ) : (
-                        filteredItems
+                        sortedInventory
                           .filter((item) => item.daysUntilExpiration <= 5)
                           .map((item) => {
                             const status = getExpirationStatus(item.daysUntilExpiration)
@@ -383,8 +448,7 @@ export default function InventoryPage() {
                                   </div>
                                   <Progress
                                     value={freshnessPercentage}
-                                    className="h-2"
-                                    indicatorClassName={progressColor}
+                                    className={`h-2 ${progressColor}`}
                                   />
                                 </div>
                                 <div className="pt-2 text-sm font-medium text-red-600">

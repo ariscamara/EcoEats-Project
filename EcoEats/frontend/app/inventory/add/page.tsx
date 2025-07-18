@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -22,6 +21,7 @@ import { foodCategories } from "@/lib/food-categories"
 
 export default function AddInventoryItemPage() {
   const router = useRouter()
+  const [unit, setUnit] = useState("")
   const [itemName, setItemName] = useState("")
   const [category, setCategory] = useState("")
   const [quantity, setQuantity] = useState("1")
@@ -40,30 +40,30 @@ export default function AddInventoryItemPage() {
         name: itemName,
         category,
         quantity: Number.parseInt(quantity),
+        unit,
         purchase_date: purchaseDate.toISOString().split("T")[0],
         expiration_date: expirationDate?.toISOString().split("T")[0],
       }
 
-      // const response = await fetch('/api/inventory/', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'X-CSRFToken': getCsrfToken(), // For Django CSRF protection
-      //   },
-      //   body: JSON.stringify(itemData),
-      // })
+      const response = await fetch("http://localhost:8000/api/inventory/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(itemData),
+      })
 
-      // if (!response.ok) {
-      //   throw new Error('Failed to add item')
-      // }
-
-      console.log("Item data to be sent to Django:", itemData)
-
+      if (![200, 201].includes(response.status)) {
+        const errorText = await response.text()
+        throw new Error("Failed to add item: " + errorText)
+      }
+      
       // Navigate back to dashboard
-      router.push("/dashboard")
-    } catch (err) {
-      console.error("Error adding item:", err)
+      router.push("/inventory")
+    } catch (err: any) {
       // TODO: Show error message to user
+      console.error("Error adding item:", err.message || err)
+      alert("There was an error adding the item: " + (err.message || "Unknown error"))
     } finally {
       setIsSubmitting(false)
     }
@@ -154,6 +154,16 @@ export default function AddInventoryItemPage() {
                           min="1"
                           value={quantity}
                           onChange={(e) => setQuantity(e.target.value)}
+                          required
+                        />
+                        </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="unit">Unit</Label>
+                        <Input
+                          id="unit"
+                          placeholder="e.g., bottle, box, kg"
+                          value={unit}
+                          onChange={(e) => setUnit(e.target.value)}
                           required
                         />
                       </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { differenceInDays } from "date-fns"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +13,7 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardShell } from "@/components/dashboard-shell"
 import type { InventoryItem } from "@/types/inventory"
 import type { Recipe } from "@/types/recipe"
-import { mockInventoryItems, mockRecipes } from "@/lib/mock-data"
+
 
 export default function DashboardPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -25,16 +26,52 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         setLoading(true)
-        // Simulate API calls - replace with actual fetch calls
-        // const inventoryResponse = await fetch('/api/inventory/')
-        // const recipesResponse = await fetch('/api/recipes/')
-        // const inventoryData = await inventoryResponse.json()
-        // const recipesData = await recipesResponse.json()
 
-        // For now, using mock data
-        setInventoryItems(mockInventoryItems)
-        setRecipes(mockRecipes)
+        // Fetch inventory data from Django backend
+        const inventoryResponse = await fetch("http://127.0.0.1:8000/api/inventory/")
+        if (!inventoryResponse.ok) throw new Error("Inventory fetch failed")
+        const inventoryData = await inventoryResponse.json()
+      
+        // Fetch recipe suggestions from Django backend
+        const recipesResponse = await fetch("http://127.0.0.1:8000/api/recipes/")
+        if (!recipesResponse.ok) throw new Error("Recipe fetch failed")
+        const recipesData = await recipesResponse.json()
+
+        
+        const today = new Date()
+
+        const processedInventory: InventoryItem[] = inventoryData.map((item: any) => {
+          //  Django fields are `purchase_date` + `expiration_date`
+          //     (not `date_added`).  Parse them as real Date objects:
+          const purchase     = new Date(item.purchase_date);
+          const expiration   = new Date(item.expiration_date);
+
+          // Guard-rails: if either date is missing or invalid, treat shelf-life as 0.
+          if (isNaN(purchase.getTime()) || isNaN(expiration.getTime())) {
+            return {
+              ...item,
+              daysUntilExpiration: 0,
+              totalShelfLife:      0,
+            }
+          }
+
+          // Difference in days (rounded *down*):
+          const totalShelfLife      = Math.max(0, differenceInDays(expiration, purchase))
+          const daysUntilExpiration = Math.max(0, differenceInDays(expiration, today))
+
+          return {
+            ...item,
+            daysUntilExpiration,
+            totalShelfLife,
+          }
+        })
+
+        //END processing block  
+        setInventoryItems(processedInventory)
+        setRecipes(recipesData)
+
       } catch (err) {
+        //Display error UI if any fetch fails
         setError("Failed to load data")
         console.error("Error fetching data:", err)
       } finally {
@@ -77,15 +114,26 @@ export default function DashboardPage() {
     }
   }
 
-  const calculateFreshnessPercentage = (daysUntilExpiration: number, totalShelfLife: number) => {
-    const percentage = (daysUntilExpiration / totalShelfLife) * 100
-    return Math.max(0, Math.min(100, percentage))
-  }
+  const calculateFreshnessPercentage = (
+    daysUntilExpiration: number,
+    totalShelfLife: number
+  ) => {
+    if (!totalShelfLife || totalShelfLife <= 0) return 0; 
+    const pct = (daysUntilExpiration / totalShelfLife) * 100;
+    return Math.max(0, Math.min(100, Math.round(pct)));
+  };
 
   const markItemAsUsed = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-used/`, { method: 'POST' })
+
+      // Send POST request to Django to mark item as used
+      const res = await fetch(`http://127.0.0.1:8000/api/inventory/${id}/mark-used/`, {
+        method: "POST",
+      })
+      if (!res.ok) throw new Error("Failed to mark as used")
+    
+      // Optmistically update UI by removing item 
       setInventoryItems(inventoryItems.filter((item) => item.id !== id))
     } catch (err) {
       console.error("Error marking item as used:", err)
@@ -95,12 +143,27 @@ export default function DashboardPage() {
   const markItemAsDiscarded = async (id: string) => {
     try {
       // TODO: Replace with actual API call to Django backend
-      // await fetch(`/api/inventory/${id}/mark-discarded/`, { method: 'POST' })
+
+      // Send POST request to Django to mark item as discarded
+      const res = await fetch(`http://127.0.0.1:8000/api/inventory/${id}/mark-discarded/`, {
+        method: "POST",
+      })
+      if (!res.ok) throw new Error("Failed to discard item")
+
+      // Optimistically update UI
       setInventoryItems(inventoryItems.filter((item) => item.id !== id))
     } catch (err) {
       console.error("Error marking item as discarded:", err)
     }
   }
+
+  // Sort items so that the least-fresh (soonest-to-expire) are first
+  const sortedInventory = [...inventoryItems].sort((a, b) => {
+    if (a.daysUntilExpiration !== b.daysUntilExpiration) {
+      return a.daysUntilExpiration - b.daysUntilExpiration; // ascending
+    }
+    return a.name.localeCompare(b.name); // stable secondary sort
+  })
 
   if (loading) {
     return (
@@ -230,7 +293,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        {inventoryItems.filter((item) => item.daysUntilExpiration <= 3).length}
+                        {sortedInventory.filter((item) => item.daysUntilExpiration <= 3).length}
                       </div>
                     </CardContent>
                   </Card>
@@ -270,7 +333,7 @@ export default function DashboardPage() {
                           </Link>
                         </div>
                       ) : (
-                        inventoryItems.map((item) => {
+                        sortedInventory.map((item) => {
                           const status = getExpirationStatus(item.daysUntilExpiration)
                           const statusColor = getStatusColor(status)
                           const progressColor = getProgressColor(status)
@@ -303,8 +366,7 @@ export default function DashboardPage() {
                                 </div>
                                 <Progress
                                   value={freshnessPercentage}
-                                  className="h-2"
-                                  indicatorClassName={progressColor}
+                                  className={`h-2 ${progressColor}`}
                                 />
                               </div>
                               <div className="flex justify-end gap-2">
@@ -357,7 +419,7 @@ export default function DashboardPage() {
                                 <div>
                                   <div className="text-sm font-medium">Uses expiring ingredients:</div>
                                   <div className="flex flex-wrap gap-1 mt-1">
-                                    {recipe.usesIngredients.map((ingredient) => (
+                                    {(recipe.usesIngredients ?? []).map((ingredient) => (
                                       <Badge key={ingredient} variant="outline">
                                         {ingredient}
                                       </Badge>
