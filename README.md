@@ -129,10 +129,10 @@ Roles of Scribe and Tech Support will be shared among all team members.
 * **AI Recipe Generation:** Recipe suggestions are based purely on exact ingredient matches from a dynamic list, dynamic AI creation or prioritization of expiring items.
 * **Barcode Scanning and Automated Input:** User can enter ingredients.
 * **Large Recipe Database:** Recipe database with around 350 recipes.
+* **User Accounts/Persistence:** Data is saved between sessions.
 
 **Limitations of this release:**
 
-* **No User Accounts/Persistence:** Data is not saved between sessions.
 * **No Dietary Preferences:** Dietary restrictions are not considered in recipe matching.
 
 This initial release establishes the foundational web application structure and demonstrates basic recipe retrieval based on user-provided ingredients. Future milestones will build upon this to incorporate the full suite of EcoEats features.
