@@ -1,7 +1,8 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
 
-name: Build and deploy Node.js app to Azure Web App - EcoEats
+name: Build and deploy Python app to Azure Web App - EcoEats
 
 on:
   push:
@@ -18,22 +19,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - name: Set up Python version
+        uses: actions/setup-python@v5
         with:
-          node-version: '22.x'
+          python-version: '3.13'
 
-      - name: npm install, build, and test
+      - name: Create and start virtual environment
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          python -m venv venv
+          source venv/bin/activate
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
-      - name: Upload artifact for deployment job
+      - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
-          name: node-app
-          path: .
+          name: python-app
+          path: |
+            .
+            !venv/
 
   deploy:
     runs-on: ubuntu-latest
@@ -43,13 +50,12 @@ jobs:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
-          name: node-app
+          name: python-app
       
       - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
+        id: deploy-to-webapp
         with:
           app-name: 'EcoEats'
           slot-name: 'Production'
-          package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_9914DE8404814E48A997F4B6C2D94034 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_C387B17F8A844151A40078C97C41DF24 }}
