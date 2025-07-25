@@ -13,24 +13,24 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout source code
+      - name: 📥 Checkout source code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: 🧰 Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '22.x'
 
-      - name: Install dependencies
-        run: npm install
+      - name: 📦 Install dependencies (with legacy peer deps)
+        run: npm install --legacy-peer-deps
 
-      - name: Build Next.js app
+      - name: 🏗️ Build Next.js app
         run: npm run build
 
-      - name: Deploy to Azure Web App
+      - name: 🚀 Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'EcoEats'
+          app-name: 'EcoEats'  # Your Azure Web App name
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D93FBA56428F4971AD29DC8645201997 }}
           package: .
