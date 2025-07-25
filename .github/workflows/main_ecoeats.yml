@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy Node.js app to Azure Web App - EcoEats
 
 on:
@@ -11,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Changed to ubuntu for better Node.js compatibility
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 
@@ -22,7 +19,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '22.x'
-          cache: 'npm'  # Added caching for faster builds
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -33,6 +30,9 @@ jobs:
       - name: Run tests
         run: npm run test --if-present
 
+      - name: Verify production dependencies
+        run: npm ls --production  # Check for dependency issues
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -42,9 +42,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment: production  # Added environment for better tracking
-    permissions:
-      contents: none  # Deployment job typically doesn't need content permissions
+    environment: production
 
     steps:
       - name: Download artifact from build job
@@ -62,10 +60,8 @@ jobs:
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_37A05AAE808949AFB2FD3CD9C6B9AD4C }}
 
-      - name: Verify deployment
+      - name: Check deployment status
         run: |
-          echo "Deployment completed. Check your Azure Web App URL."
-
-
-
-          
+          echo "Checking application health..."
+          sleep 30  # Wait for app to start
+          curl -s -o /dev/null -w "%{http_code}" https://ecoeats.azurewebsites.net/health        
